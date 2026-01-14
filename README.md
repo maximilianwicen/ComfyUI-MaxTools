@@ -15,4 +15,4 @@ Restart ComfyUI.
 
 ## Nodes
 
-- **Max Quick Image Size** (`MaxQuickImageSize`): Used mainly for Image to Image or Image to Video - takes an image or width and height and outputs new width and new height based on user preference. Elucidates aspect ratio etc.
+- **Max Quick Image Size** (`MaxQuickImageSize`): useful for Image-to-Image or Image-to-Video workflows; outputs `new_width`/`new_height` by selecting square/landscape/portrait presets based on aspect ratio. Provide `width`/`height`, or connect an `IMAGE` to infer dimensions.

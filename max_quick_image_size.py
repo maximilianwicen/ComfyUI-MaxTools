@@ -14,26 +14,60 @@ def _to_multiple_of(value: int, multiple: int) -> int:
     return up if (value - down) >= (up - value) else down
 
 
+def _infer_width_height_from_image(image) -> tuple[int, int] | None:
+    """Infer (width, height) from a ComfyUI IMAGE-like tensor.
+
+    ComfyUI typically represents IMAGE as a torch tensor with shape:
+    - [B, H, W, C] (most common)
+    - [H, W, C] (sometimes)
+
+    This function avoids PIL/cv2 and only inspects the `shape`.
+    """
+
+    if image is None:
+        return None
+
+    shape = getattr(image, "shape", None)
+    if shape is None:
+        return None
+
+    try:
+        dims = tuple(int(x) for x in shape)
+    except Exception:
+        return None
+
+    if len(dims) == 4:
+        _, height, width, _ = dims
+        return (width, height)
+
+    if len(dims) == 3:
+        height, width, _ = dims
+        return (width, height)
+
+    return None
+
+
 class MaxQuickImageSize:
     @classmethod
     def INPUT_TYPES(cls):
-        # Note: ComfyUI INT widgets support `step` so the up/down arrows move by 32.
-        # Users can still type any number, so we also snap to multiples of 32 at runtime.
         return {
             "required": {
-                "width": (
-                    "INT",
-                    {"default": 1024, "min": 0, "max": 16384, "step": 1, "forceInput": True},
-                ),
-                "height": (
-                    "INT",
-                    {"default": 1024, "min": 0, "max": 16384, "step": 1, "forceInput": True},
-                ),
                 "square_size": ("INT", {"default": 1024, "min": 0, "max": 16384, "step": 32}),
                 "landscape_width": ("INT", {"default": 1280, "min": 0, "max": 16384, "step": 32}),
                 "landscape_height": ("INT", {"default": 720, "min": 0, "max": 16384, "step": 32}),
                 "portrait_width": ("INT", {"default": 720, "min": 0, "max": 16384, "step": 32}),
                 "portrait_height": ("INT", {"default": 1280, "min": 0, "max": 16384, "step": 32}),
+            },
+            "optional": {
+                "width": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 16384, "step": 1, "forceInput": True},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 16384, "step": 1, "forceInput": True},
+                ),
+                "image": ("IMAGE",),
             }
         }
 
@@ -44,13 +78,14 @@ class MaxQuickImageSize:
 
     def pick_size(
         self,
-        width: int,
-        height: int,
         square_size: int,
         landscape_width: int,
         landscape_height: int,
         portrait_width: int,
         portrait_height: int,
+        width: int = 0,
+        height: int = 0,
+        image=None,
     ):
         # Snap presets to multiples of 32 as requested
         square_size = _to_multiple_of(square_size, 32)
@@ -59,8 +94,13 @@ class MaxQuickImageSize:
         portrait_width = _to_multiple_of(portrait_width, 32)
         portrait_height = _to_multiple_of(portrait_height, 32)
 
-        width = int(width)
-        height = int(height)
+        width = int(width or 0)
+        height = int(height or 0)
+
+        if (width <= 0 or height <= 0) and image is not None:
+            inferred = _infer_width_height_from_image(image)
+            if inferred is not None:
+                width, height = inferred
 
         if width <= 0 or height <= 0:
             # Degenerate input: default to square preset.
